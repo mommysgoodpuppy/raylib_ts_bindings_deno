@@ -160,6 +160,8 @@ export function stringToPointer(str: string): Deno.PointerValue {
 }
 
 export type CStringHandle = Uint8Array<ArrayBuffer>;
+const TRANSIENT_CSTRING_CACHE_SIZE = 256;
+const transientCStringHandles: CStringHandle[] = [];
 
 export function createCString(str: string): [Deno.PointerValue<number>, CStringHandle] {
   const handle = new TextEncoder().encode(`${str}\0`);
@@ -170,6 +172,15 @@ export function createCString(str: string): [Deno.PointerValue<number>, CStringH
   }
 
   return [pointer, handle];
+}
+
+export function cstr(str: string): Deno.PointerValue<number> {
+  const [pointer, handle] = createCString(str);
+  transientCStringHandles.push(handle);
+  if (transientCStringHandles.length > TRANSIENT_CSTRING_CACHE_SIZE) {
+    transientCStringHandles.shift();
+  }
+  return pointer;
 }
 
 export class P {

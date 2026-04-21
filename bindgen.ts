@@ -810,6 +810,10 @@ function emitRawBindings(
     "",
     ...emitStructDefinitions(api, context),
     "",
+    ...emitEnumDefinitions(api),
+    "",
+    ...emitDefineDefinitions(api),
+    "",
     ...emitStructValueHelpers(),
     "",
     "export const symbolDefinitions = {",
@@ -909,6 +913,8 @@ function emitRawBindings(
   lines.push("}");
   lines.push("");
   lines.push(...emitFunctionWrappers(api, functionPass.supported, context));
+  lines.push("");
+  lines.push(...emitRaylibNamespace(api, functionPass.supported, context));
 
   return {
     source: lines.join("\n"),
@@ -919,8 +925,18 @@ function emitRawBindings(
 }
 
 function emitPrimitiveScalarAliases(): string[] {
+  return getPrimitiveScalarAliasNames().map((name) => {
+    const info = Object.values(PRIMITIVE_TYPE_INFO).find((entry) => entry.ts === name);
+    if (info === undefined) {
+      throw new Error(`Missing primitive type info for ${name}`);
+    }
+    return `export type ${name} = ${info.runtimeTs};`;
+  });
+}
+
+function getPrimitiveScalarAliasNames(): string[] {
   const emitted = new Set<string>();
-  const lines: string[] = [];
+  const names: string[] = [];
 
   for (const info of Object.values(PRIMITIVE_TYPE_INFO)) {
     if (
@@ -932,10 +948,111 @@ function emitPrimitiveScalarAliases(): string[] {
 
     if (emitted.has(info.ts)) continue;
     emitted.add(info.ts);
-    lines.push(`export type ${info.ts} = ${info.runtimeTs};`);
+    names.push(info.ts);
   }
 
-  return lines.sort();
+  return names.sort();
+}
+
+function emitEnumDefinitions(api: RaylibApi): string[] {
+  const lines: string[] = [];
+
+  for (const entry of api.enums) {
+    lines.push(...makeSanityComment([
+      `${entry.name}`,
+      `Description: ${entry.description ?? ""}`,
+    ]));
+    lines.push(`export enum ${entry.name} {`);
+    for (const value of entry.values) {
+      lines.push(`  ${value.name} = ${value.value},`);
+    }
+    lines.push("}");
+    lines.push("");
+  }
+
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function emitDefineDefinitions(api: RaylibApi): string[] {
+  const lines: string[] = [];
+
+  for (const entry of getEmittableDefineEntries(api)) {
+    const emitted = emitDefineDefinition(entry);
+    if (emitted.length === 0) continue;
+    lines.push(...makeSanityComment([
+      `${entry.name}`,
+      `Type: ${entry.type}`,
+      `Description: ${entry.description ?? ""}`,
+    ]));
+    lines.push(...emitted);
+    lines.push("");
+  }
+
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function getEmittableDefineEntries(api: RaylibApi): RaylibDefine[] {
+  return api.defines.filter((entry) =>
+    !(
+      entry.type === "GUARD" ||
+      entry.type === "MACRO" ||
+      entry.type === "UNKNOWN" ||
+      entry.name.includes("(")
+    )
+  );
+}
+
+function emitDefineDefinition(entry: RaylibDefine): string[] {
+  if (
+    entry.type === "GUARD" ||
+    entry.type === "MACRO" ||
+    entry.type === "UNKNOWN" ||
+    entry.name.includes("(")
+  ) {
+    return [];
+  }
+
+  switch (entry.type) {
+    case "INT":
+      return [`export const ${entry.name}: CInt = ${Number(entry.value)};`];
+    case "LONG":
+    case "LONG_LONG":
+      return [`export const ${entry.name}: CLongLong = ${BigInt(entry.value as number | string)}n;`];
+    case "FLOAT":
+    case "DOUBLE":
+      return [`export const ${entry.name}: CFloat = ${normalizeCExpression(String(entry.value))};`];
+    case "FLOAT_MATH":
+      return [`export const ${entry.name}: CFloat = ${normalizeCExpression(String(entry.value))};`];
+    case "STRING":
+      return [`export const ${entry.name} = ${JSON.stringify(String(entry.value))};`];
+    case "COLOR": {
+      const colorValue = parseColorDefine(String(entry.value));
+      return colorValue === null ? [] : [`export const ${entry.name}: Color = ${colorValue};`];
+    }
+    default:
+      return typeof entry.value === "number"
+        ? [`export const ${entry.name} = ${entry.value};`]
+        : [];
+  }
+}
+
+function normalizeCExpression(value: string): string {
+  return value
+    .replace(/([0-9])f\b/g, "$1")
+    .replace(/([0-9])d\b/g, "$1")
+    .replace(/\s+/g, "");
+}
+
+function parseColorDefine(value: string): string | null {
+  const match = value.match(
+    /CLITERAL\(Color\)\{\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*\}/,
+  );
+  if (match === null) return null;
+
+  const [, r, g, b, a] = match;
+  return `{ r: ${r}, g: ${g}, b: ${b}, a: ${a} }`;
 }
 
 function emitFunctionWrappers(
@@ -947,6 +1064,7 @@ function emitFunctionWrappers(
 
   for (const fn of supportedFunctions) {
     const params = getFunctionParams(api, fn.name);
+    const rawReturnType = getFunctionReturnType(api, fn.name);
     const byValueParams = params
       .map((param) => {
         const struct = getByValueStructName(param.type, context);
@@ -955,35 +1073,27 @@ function emitFunctionWrappers(
       .filter((entry): entry is { name: string; struct: string } => entry !== null);
     const byValueReturn = getByValueStructName(getFunctionReturnType(api, fn.name), context);
 
-    const commentLines = [
-      `${fn.name}`,
-      `Description: ${getFunctionDescription(api, fn.name)}`,
-      `Parameters: ${JSON.stringify(params, null, 2)}`,
-      `Return: ${getFunctionReturnType(api, fn.name)}`,
-      byValueParams.length === 0 && byValueReturn === null
-        ? "CallStyle: thin wrapper over getRaylibSymbols(); arguments stay in raw FFI form."
-        : "CallStyle: thin wrapper over getRaylibSymbols(); struct-by-value calls still require explicit bytes marshaling.",
-    ];
-
-    if (byValueParams.length > 0) {
-      commentLines.push(
-        `StructBytesParams: ${
-          byValueParams.map(({ name, struct }) => `${name} => ${struct}.toBytes(value)`).join("; ")
-        }`,
-      );
-    }
-
-    if (byValueReturn !== null) {
-      commentLines.push(`StructBytesReturn: ${byValueReturn}.fromBytes(result)`);
-    }
-
-    lines.push(...makeSanityComment(commentLines));
+    const paramDocs = params.map((param) => {
+      const struct = getByValueStructName(param.type, context);
+      const details = [];
+      if ((param.description ?? "").trim().length > 0) details.push(param.description!.trim());
+      if (struct !== null) details.push(`Pass struct bytes created with ${struct}.toBytes(value).`);
+      return { name: sanitizeIdentifier(param.name), description: details.join(" ") };
+    });
+    lines.push(...makeJsDocComment(
+      getFunctionDescription(api, fn.name) || fn.name,
+      paramDocs,
+      rawReturnType === "void"
+        ? undefined
+        : byValueReturn !== null
+        ? `Struct bytes for ${byValueReturn}.`
+        : `Returns ${rawReturnType}.`,
+    ));
 
     const safeParamNames = makeSafeParamNames(params);
     const paramDeclarations = params.map((param, index) =>
       `${safeParamNames[index]}: ${getWrapperParamType(fn.name, index, param.type, context)}`
     );
-    const rawReturnType = getFunctionReturnType(api, fn.name);
     const returnType = getWrapperReturnType(fn.name, rawReturnType, context);
     const callArgs = params.map((param, index) => {
       const byValueStruct = getByValueStructName(param.type, context);
@@ -1003,6 +1113,84 @@ function emitFunctionWrappers(
   }
 
   if (lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+function emitRaylibNamespace(
+  api: RaylibApi,
+  supportedFunctions: GeneratedFunction[],
+  context: GenerationContext,
+): string[] {
+  const lines: string[] = [];
+  const runtimeEntries = [
+    "symbolDefinitions",
+    "unsupportedCallbacks",
+    "unsupportedFunctions",
+    "manualStructMarshalingCandidates",
+    "getDefaultRaylibLibraryName",
+    "loadRaylib",
+    "unloadRaylib",
+    "isRaylibLoaded",
+    "getRaylibLibrary",
+    "getRaylibSymbols",
+    "createByValueStruct",
+    "readByValueStruct",
+    "createPointerStruct",
+    ...api.structs.map((entry) => entry.name),
+    ...api.enums.map((entry) => entry.name),
+    ...getEmittableDefineEntries(api).map((entry) => entry.name),
+    ...supportedFunctions.map((entry) => entry.name),
+  ];
+  const typeEntries = [
+    ...getPrimitiveScalarAliasNames(),
+    "CStringPointer",
+    "BytePointer",
+    "FloatPointer",
+    "IntPointer",
+    "UIntPointer",
+    "UShortPointer",
+    "VoidPointer",
+    ...Array.from(context.opaqueTypes).sort(),
+    ...api.aliases.map((entry) => normalizeAliasName(entry.name)),
+    ...api.structs.map((entry) => entry.name),
+    "RaylibSymbols",
+    "RaylibLoadedSymbols",
+  ];
+  const uniqueRuntimeEntries = [...new Set(runtimeEntries)];
+  const uniqueTypeEntries = [...new Set(typeEntries)];
+
+  lines.push(...makeJsDocComment(
+    "Namespace-style runtime surface for the generated raylib binding.",
+    [],
+    undefined,
+    [
+      "Lets you import the module once and access runtime values as raylib.SomeFunction, raylib.Color, raylib.KeyboardKey, etc.",
+      "Types are also available in type position, for example raylib.Vector3 or raylib.Camera3D.",
+    ],
+  ));
+  for (const entry of uniqueRuntimeEntries) {
+    lines.push(`const raylibNamespace_${entry} = ${entry};`);
+  }
+  lines.push("");
+  for (const entry of uniqueTypeEntries) {
+    lines.push(`type RaylibNamespaceType_${entry} = ${entry};`);
+  }
+  lines.push("");
+  lines.push("export function raylib(): never {");
+  lines.push('  throw new Error("raylib is a namespace object and cannot be called.");');
+  lines.push("}");
+  lines.push("");
+  lines.push("export namespace raylib {");
+  for (const entry of uniqueRuntimeEntries) {
+    lines.push(`  export const ${entry} = raylibNamespace_${entry};`);
+  }
+  for (const entry of uniqueTypeEntries) {
+    lines.push(`  export type ${entry} = RaylibNamespaceType_${entry};`);
+  }
+  lines.push("}");
+  lines.push("");
+  lines.push("export default raylib;");
+
   return lines;
 }
 
@@ -1165,6 +1353,34 @@ function makeSanityComment(lines: string[], indent = 0): string[] {
   }
   comment.push(`${prefix}*/`);
   return comment;
+}
+
+function makeJsDocComment(
+  summary: string,
+  params: Array<{ name: string; description: string }> = [],
+  returns?: string,
+  notes: string[] = [],
+  indent = 0,
+): string[] {
+  const prefix = " ".repeat(indent);
+  const lines = [`${prefix}/**`];
+  for (const line of summary.split("\n")) {
+    lines.push(`${prefix} * ${line}`);
+  }
+  for (const note of notes) {
+    lines.push(`${prefix} *`);
+    for (const line of note.split("\n")) {
+      lines.push(`${prefix} * ${line}`);
+    }
+  }
+  for (const param of params) {
+    lines.push(`${prefix} * @param ${param.name}${param.description ? ` ${param.description}` : ""}`);
+  }
+  if (returns !== undefined) {
+    lines.push(`${prefix} * @returns ${returns}`);
+  }
+  lines.push(`${prefix} */`);
+  return lines;
 }
 
 function sanitizeIdentifier(name: string): string {
