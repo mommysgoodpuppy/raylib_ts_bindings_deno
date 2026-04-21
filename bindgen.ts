@@ -4,6 +4,30 @@ const API_JSON_PATH_CANDIDATES = [
 ] as const;
 const OUTPUT_PATH = "raylib_bindings.ts";
 
+const MANUAL_FUNCTION_OVERRIDES: Array<{
+  after?: string;
+  function: RaylibFunction;
+}> = [
+  {
+    after: "rlGetMatrixViewOffsetStereo",
+    function: {
+      name: "rlSetMatrixProjection",
+      description: "Set a custom projection matrix (replaces internal projection matrix)",
+      returnType: "void",
+      params: [{ type: "Matrix", name: "projection" }],
+    },
+  },
+  {
+    after: "rlSetMatrixProjection",
+    function: {
+      name: "rlSetMatrixModelview",
+      description: "Set a custom modelview matrix (replaces internal modelview matrix)",
+      returnType: "void",
+      params: [{ type: "Matrix", name: "view" }],
+    },
+  },
+];
+
 const PRIMITIVE_TYPE_INFO: Record<string, { ffi: string; ts: string; runtimeTs: string }> = {
   void: { ffi: "void", ts: "void", runtimeTs: "void" },
   bool: { ffi: "bool", ts: "CBool", runtimeTs: "boolean" },
@@ -227,11 +251,35 @@ export async function loadRaylibApi(path?: string): Promise<RaylibApi> {
   const resolvedPath = await resolveApiJsonPath(path);
   const raw = await Deno.readTextFile(resolvedPath);
   const sanitized = sanitizeRaylibApiJson(raw);
-  return JSON.parse(sanitized) as RaylibApi;
+  return applyManualFunctionOverrides(JSON.parse(sanitized) as RaylibApi);
 }
 
 export function sanitizeRaylibApiJson(raw: string): string {
   return raw.split("\n").map((line) => sanitizeDescriptionLine(line)).join("\n");
+}
+
+function applyManualFunctionOverrides(api: RaylibApi): RaylibApi {
+  const functions = [...api.functions];
+
+  for (const override of MANUAL_FUNCTION_OVERRIDES) {
+    if (functions.some((entry) => entry.name === override.function.name)) continue;
+
+    const anchorIndex = override.after === undefined
+      ? -1
+      : functions.findIndex((entry) => entry.name === override.after);
+
+    if (anchorIndex === -1) {
+      functions.push(override.function);
+      continue;
+    }
+
+    functions.splice(anchorIndex + 1, 0, override.function);
+  }
+
+  return {
+    ...api,
+    functions,
+  };
 }
 
 function sanitizeDescriptionLine(line: string): string {

@@ -14822,6 +14822,36 @@ export const symbolDefinitions = {
     parameters: ["function"],
     result: "void",
   },
+  /*
+  rlSetMatrixProjection
+  Description: Set a custom projection matrix (replaces internal projection matrix)
+  Parameters: [
+    {
+      "type": "Matrix",
+      "name": "projection"
+    }
+  ]
+  Return: void
+  */
+  rlSetMatrixProjection: {
+    parameters: [MatrixByValue],
+    result: "void",
+  },
+  /*
+  rlSetMatrixModelview
+  Description: Set a custom modelview matrix (replaces internal modelview matrix)
+  Parameters: [
+    {
+      "type": "Matrix",
+      "name": "view"
+    }
+  ]
+  Return: void
+  */
+  rlSetMatrixModelview: {
+    parameters: [MatrixByValue],
+    result: "void",
+  },
 } as const;
 
 export type RaylibSymbols = typeof symbolDefinitions;
@@ -17635,6 +17665,22 @@ export const manualStructMarshalingCandidates = [
     params: [{"type":"AudioStream","name":"stream"},{"type":"AudioCallback","name":"processor"}],
     byValueReturn: null,
     byValueParams: [{"name":"stream","type":"AudioStream","struct":"AudioStream"}],
+  },
+  {
+    name: "rlSetMatrixProjection",
+    description: "Set a custom projection matrix (replaces internal projection matrix)",
+    returnType: "void",
+    params: [{"type":"Matrix","name":"projection"}],
+    byValueReturn: null,
+    byValueParams: [{"name":"projection","type":"Matrix","struct":"Matrix"}],
+  },
+  {
+    name: "rlSetMatrixModelview",
+    description: "Set a custom modelview matrix (replaces internal modelview matrix)",
+    returnType: "void",
+    params: [{"type":"Matrix","name":"view"}],
+    byValueReturn: null,
+    byValueParams: [{"name":"view","type":"Matrix","struct":"Matrix"}],
   },
 ] as const;
 
@@ -23279,6 +23325,22 @@ export function DetachAudioMixedProcessor(processor: Parameters<RaylibLoadedSymb
 }
 
 /**
+ * Set a custom projection matrix (replaces internal projection matrix)
+ * @param projection Pass struct bytes created with Matrix.toBytes(value).
+ */
+export function rlSetMatrixProjection(projection: StructBytes<Matrix>): void {
+  return getRaylibSymbols().rlSetMatrixProjection(projection as unknown as BufferSource);
+}
+
+/**
+ * Set a custom modelview matrix (replaces internal modelview matrix)
+ * @param view Pass struct bytes created with Matrix.toBytes(value).
+ */
+export function rlSetMatrixModelview(view: StructBytes<Matrix>): void {
+  return getRaylibSymbols().rlSetMatrixModelview(view as unknown as BufferSource);
+}
+
+/**
  * Ergonomic helper surface over the raw ABI-explicit API.
  *
  * Accepts high-level JS strings and struct objects for the subset of functions where coercion is straightforward and safe.
@@ -28882,6 +28944,22 @@ export const H = {
   DetachAudioMixedProcessor(processor: Parameters<RaylibLoadedSymbols["DetachAudioMixedProcessor"]>[0]): void {
     return DetachAudioMixedProcessor(processor);
   },
+
+  /**
+   * Set a custom projection matrix (replaces internal projection matrix)
+   * @param projection Accepts a Matrix object or raw struct bytes.
+   */
+  rlSetMatrixProjection(projection: StructLike<Matrix>): void {
+    return rlSetMatrixProjection(coerceStructLike(projection, Matrix));
+  },
+
+  /**
+   * Set a custom modelview matrix (replaces internal modelview matrix)
+   * @param view Accepts a Matrix object or raw struct bytes.
+   */
+  rlSetMatrixModelview(view: StructLike<Matrix>): void {
+    return rlSetMatrixModelview(coerceStructLike(view, Matrix));
+  },
 } as const;
 
 export type RaylibHighLevelApi = typeof H;
@@ -29575,6 +29653,8 @@ const raylibNamespace_AttachAudioStreamProcessor = AttachAudioStreamProcessor;
 const raylibNamespace_DetachAudioStreamProcessor = DetachAudioStreamProcessor;
 const raylibNamespace_AttachAudioMixedProcessor = AttachAudioMixedProcessor;
 const raylibNamespace_DetachAudioMixedProcessor = DetachAudioMixedProcessor;
+const raylibNamespace_rlSetMatrixProjection = rlSetMatrixProjection;
+const raylibNamespace_rlSetMatrixModelview = rlSetMatrixModelview;
 
 type RaylibNamespaceType_CBool = CBool;
 type RaylibNamespaceType_CChar = CChar;
@@ -30344,6 +30424,8 @@ export namespace raylib {
   export const DetachAudioStreamProcessor = raylibNamespace_DetachAudioStreamProcessor;
   export const AttachAudioMixedProcessor = raylibNamespace_AttachAudioMixedProcessor;
   export const DetachAudioMixedProcessor = raylibNamespace_DetachAudioMixedProcessor;
+  export const rlSetMatrixProjection = raylibNamespace_rlSetMatrixProjection;
+  export const rlSetMatrixModelview = raylibNamespace_rlSetMatrixModelview;
   export type CBool = RaylibNamespaceType_CBool;
   export type CChar = RaylibNamespaceType_CChar;
   export type CDouble = RaylibNamespaceType_CDouble;
