@@ -1,0 +1,6 @@
+[submodule "submodules/raylib"]
+	path = submodules/raylib
+	url = https://github.com/raysan5/raylib.git
+[submodule "submodules/byte_type_c"]
+	path = submodules/byte_type_c
+	url = https://github.com/mommysgoodpuppy/byte_type_C.git
