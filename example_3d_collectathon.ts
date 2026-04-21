@@ -1,5 +1,4 @@
 import raylib from "./raylib_bindings.ts";
-import { createCString, cstr } from "./utils.ts";
 
 const DEFAULT_RAYLIB_PATH = new URL(
   "./raylib-5.5_macos/lib/libraylib.dylib",
@@ -73,18 +72,11 @@ function createPickups(): Pickup[] {
 
 function main() {
   const raylibPath = Deno.args[0] ?? DEFAULT_RAYLIB_PATH;
-  const [titlePointer, titleHandle] = createCString("raylib ffi 3D collectathon");
-  const [instructionsPointer, instructionsHandle] = createCString(
-    "WASD move  SHIFT sprint  Mouse wheel zoom  R restart",
-  );
-  const [goalPointer, goalHandle] = createCString("Collect every orb in the arena");
-  const [winPointer, winHandle] = createCString("Arena cleared!");
-  const [restartPointer, restartHandle] = createCString("Press R to play again");
-  void titleHandle;
-  void instructionsHandle;
-  void goalHandle;
-  void winHandle;
-  void restartHandle;
+  const title = "raylib ffi 3D collectathon";
+  const instructions = "WASD move  SHIFT sprint  Mouse wheel zoom  R restart";
+  const goal = "Collect every orb in the arena";
+  const winText = "Arena cleared!";
+  const restartText = "Press R to play again";
 
   raylib.loadRaylib(raylibPath);
 
@@ -92,20 +84,20 @@ function main() {
 
   try {
     raylib.SetConfigFlags(raylib.ConfigFlags.FLAG_WINDOW_RESIZABLE | raylib.ConfigFlags.FLAG_MSAA_4X_HINT);
-    raylib.InitWindow(1280, 720, titlePointer);
+    raylib.H.InitWindow(1280, 720, title);
     windowInitialized = true;
     raylib.SetTargetFPS(60);
 
-    const floorColor = raylib.Color.toBytes(raylib.LIGHTGRAY);
-    const wallFill = raylib.Color.toBytes(raylib.SKYBLUE);
-    const wallWire = raylib.Color.toBytes(raylib.DARKGRAY);
-    const playerColor = raylib.Color.toBytes(raylib.BLUE);
-    const playerWire = raylib.Color.toBytes(raylib.BLACK);
-    const textColor = raylib.Color.toBytes(raylib.BLACK);
-    const hudColor = raylib.Fade(raylib.Color.toBytes(raylib.WHITE), 0.82);
-    const goalColor = raylib.Color.toBytes(raylib.DARKGRAY);
-    const winColor = raylib.Color.toBytes(raylib.GREEN);
-    const dangerColor = raylib.Color.toBytes(raylib.RED);
+    const floorColor = raylib.LIGHTGRAY;
+    const wallFill = raylib.SKYBLUE;
+    const wallWire = raylib.DARKGRAY;
+    const playerColor = raylib.BLUE;
+    const playerWire = raylib.BLACK;
+    const textColor = raylib.BLACK;
+    const hudColor = raylib.H.Fade(raylib.WHITE, 0.82);
+    const goalColor = raylib.DARKGRAY;
+    const winColor = raylib.GREEN;
+    const dangerColor = raylib.RED;
 
     let playerPosition = cloneVec3(PLAYER_START);
     let cameraDistance = 14;
@@ -133,10 +125,7 @@ function main() {
       const candidatePosition = vec3Add(playerPosition, vec3Scale(move, speed * dt));
       const candidateBox = makeBoundingBox(candidatePosition, PLAYER_SIZE);
       const blocked = WALLS.some((wall) =>
-        raylib.CheckCollisionBoxes(
-          raylib.BoundingBox.toBytes(candidateBox),
-          raylib.BoundingBox.toBytes(makeBoundingBox(wall.center, wall.size)),
-        )
+        raylib.H.CheckCollisionBoxes(candidateBox, makeBoundingBox(wall.center, wall.size))
       );
 
       if (!blocked) {
@@ -151,9 +140,9 @@ function main() {
           y: pickup.basePosition.y + bobOffset,
           z: pickup.basePosition.z,
         };
-        const hit = raylib.CheckCollisionBoxes(
-          raylib.BoundingBox.toBytes(makeBoundingBox(playerPosition, PLAYER_SIZE)),
-          raylib.BoundingBox.toBytes(makeBoundingBox(pickupCenter, { x: 1, y: 1, z: 1 })),
+        const hit = raylib.H.CheckCollisionBoxes(
+          makeBoundingBox(playerPosition, PLAYER_SIZE),
+          makeBoundingBox(pickupCenter, { x: 1, y: 1, z: 1 }),
         );
         if (hit) {
           pickup.collected = true;
@@ -182,41 +171,41 @@ function main() {
       const statusColor = allCollected ? winColor : goalColor;
 
       raylib.BeginDrawing();
-      raylib.ClearBackground(raylib.Color.toBytes(raylib.RAYWHITE));
+      raylib.H.ClearBackground(raylib.RAYWHITE);
 
-      raylib.BeginMode3D(raylib.Camera3D.toBytes(camera));
-      raylib.DrawPlane(raylib.Vector3.toBytes({ x: 0, y: 0, z: 0 }), raylib.Vector2.toBytes({ x: 24, y: 24 }), floorColor);
+      raylib.H.BeginMode3D(camera);
+      raylib.H.DrawPlane({ x: 0, y: 0, z: 0 }, { x: 24, y: 24 }, floorColor);
       raylib.DrawGrid(24, 1);
 
       for (const wall of WALLS) {
-        raylib.DrawCubeV(raylib.Vector3.toBytes(wall.center), raylib.Vector3.toBytes(wall.size), wallFill);
-        raylib.DrawCubeWiresV(raylib.Vector3.toBytes(wall.center), raylib.Vector3.toBytes(wall.size), wallWire);
+        raylib.H.DrawCubeV(wall.center, wall.size, wallFill);
+        raylib.H.DrawCubeWiresV(wall.center, wall.size, wallWire);
       }
 
       for (let i = 0; i < pickups.length; i++) {
         const pickup = pickups[i];
         if (pickup.collected) continue;
         const bobOffset = Math.sin(time * 2.5 + i) * 0.2;
-        const pickupColor = raylib.Fade(raylib.Color.toBytes(raylib.ORANGE), 0.65 + Math.sin(time * 4 + i) * 0.2);
+        const pickupColor = raylib.H.Fade(raylib.ORANGE, 0.65 + Math.sin(time * 4 + i) * 0.2);
         const center = {
           x: pickup.basePosition.x,
           y: pickup.basePosition.y + bobOffset,
           z: pickup.basePosition.z,
         };
-        raylib.DrawSphere(raylib.Vector3.toBytes(center), 0.5, pickupColor);
-        raylib.DrawSphereWires(raylib.Vector3.toBytes(center), 0.55, 8, 8, raylib.Color.toBytes(raylib.YELLOW));
+        raylib.H.DrawSphere(center, 0.5, pickupColor);
+        raylib.H.DrawSphereWires(center, 0.55, 8, 8, raylib.YELLOW);
       }
 
-      raylib.DrawCubeV(raylib.Vector3.toBytes(playerPosition), raylib.Vector3.toBytes(PLAYER_SIZE), playerColor);
-      raylib.DrawCubeWiresV(raylib.Vector3.toBytes(playerPosition), raylib.Vector3.toBytes(PLAYER_SIZE), playerWire);
+      raylib.H.DrawCubeV(playerPosition, PLAYER_SIZE, playerColor);
+      raylib.H.DrawCubeWiresV(playerPosition, PLAYER_SIZE, playerWire);
       raylib.EndMode3D();
 
-      raylib.DrawRectangle(16, 16, 420, 104, hudColor);
-      raylib.DrawText(instructionsPointer, 30, 28, 20, textColor);
-      raylib.DrawText(goalPointer, 30, 54, 20, goalColor);
-      raylib.DrawText(cstr(scoreText), 30, 80, 24, textColor);
-      raylib.DrawText(
-        cstr(allCollected ? "All pickups collected" : "Find the glowing orbs"),
+      raylib.H.DrawRectangle(16, 16, 420, 104, hudColor);
+      raylib.H.DrawText(instructions, 30, 28, 20, textColor);
+      raylib.H.DrawText(goal, 30, 54, 20, goalColor);
+      raylib.H.DrawText(scoreText, 30, 80, 24, textColor);
+      raylib.H.DrawText(
+        allCollected ? "All pickups collected" : "Find the glowing orbs",
         230,
         80,
         24,
@@ -225,13 +214,13 @@ function main() {
       raylib.DrawFPS(1180, 16);
 
       if (allCollected) {
-        const winWidth = raylib.MeasureText(winPointer, 40);
-        const restartWidth = raylib.MeasureText(restartPointer, 24);
+        const winWidth = raylib.H.MeasureText(winText, 40);
+        const restartWidth = raylib.H.MeasureText(restartText, 24);
         const centerX = Math.floor((raylib.GetScreenWidth() - winWidth) / 2);
         const restartX = Math.floor((raylib.GetScreenWidth() - restartWidth) / 2);
-        raylib.DrawRectangle(centerX - 20, 140, winWidth + 40, 92, raylib.Fade(raylib.Color.toBytes(raylib.WHITE), 0.9));
-        raylib.DrawText(winPointer, centerX, 156, 40, winColor);
-        raylib.DrawText(restartPointer, restartX, 198, 24, dangerColor);
+        raylib.H.DrawRectangle(centerX - 20, 140, winWidth + 40, 92, raylib.H.Fade(raylib.WHITE, 0.9));
+        raylib.H.DrawText(winText, centerX, 156, 40, winColor);
+        raylib.H.DrawText(restartText, restartX, 198, 24, dangerColor);
       }
 
       raylib.EndDrawing();
