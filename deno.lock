@@ -1,10 +1,14 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@denosaurs/byte-type@~0.4.1": "0.4.1",
     "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12"
   },
   "jsr": {
+    "@denosaurs/byte-type@0.4.1": {
+      "integrity": "bf18e895a057482b21926cecf0a9c5fe57f544cbe535c1419f45b5cd090250d3"
+    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
@@ -59,5 +63,10 @@
     "https://raw.githubusercontent.com/mommysgoodpuppy/byte_type_C/main/src/varint/i32_leb128.ts": "e37e9e24c48ee7b43264c486ded758ffabb9a4e261f7c8d6d275a48b78ea2f29",
     "https://raw.githubusercontent.com/mommysgoodpuppy/byte_type_C/main/src/varint/i64_leb128.ts": "febba94e3fd9ac71bd65219be9f651f2f7706e11a621153f282ce6e33c69d8fe",
     "https://raw.githubusercontent.com/mommysgoodpuppy/byte_type_C/main/src/varint/mod.ts": "f52855601abd19c9af3cdc4e19afde4b57a0d567b99a807063b6a3761b783bba"
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@denosaurs/byte-type@~0.4.1"
+    ]
   }
 }
